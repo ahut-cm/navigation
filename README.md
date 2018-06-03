@@ -1,5 +1,11 @@
 ROS Navigation Stack
 ====================
+1.修改了move-base来配合改动后的teb-local-planner；
+2.修改了costmap_2d，来解决障碍物层有时不更新的错误。
+
+
+
+
 
 A 2D navigation stack that takes in information from odometry, sensor
 streams, and a goal pose and outputs safe velocity commands that are sent

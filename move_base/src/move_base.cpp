@@ -91,7 +91,7 @@ namespace move_base {
 
     ros::NodeHandle action_nh("move_base");
     action_goal_pub_ = action_nh.advertise<move_base_msgs::MoveBaseActionGoal>("goal", 1);
-
+    m_FirstStep_pub_ = action_nh.advertise<std_msgs::String>("First_Step", 10);
     //we'll provide a mechanism for some people to send goals as PoseStamped messages over a topic
     //they won't get any useful information back about its status, but this is useful for tools
     //like nav_view and rviz
@@ -108,7 +108,7 @@ namespace move_base {
     private_nh.param("clearing_rotation_allowed", clearing_rotation_allowed_, true);
     private_nh.param("recovery_behavior_enabled", recovery_behavior_enabled_, true);
 
-    //create the ros wrapper for the planner's costmap... and initializer a pointer we'll use with the underlying map
+    //create the ros wrapper for the planner's costmap... and initializer a pointer we'll use with the underlying map对于计划的创建costmap ROS的包装…初始化器将与底层映射一起使用指针。
     planner_costmap_ros_ = new costmap_2d::Costmap2DROS("global_costmap", tf_);
     planner_costmap_ros_->pause();
 
@@ -268,6 +268,11 @@ namespace move_base {
     action_goal.goal.target_pose = *goal;
 
     action_goal_pub_.publish(action_goal);
+    std_msgs::String msg;
+    std::stringstream ss;
+    ss << "true ";
+    msg.data = ss.str();
+    m_FirstStep_pub_.publish(msg);
   }
 
   void MoveBase::clearCostmapWindows(double size_x, double size_y){
@@ -452,7 +457,7 @@ namespace move_base {
     planner_.reset();
     tc_.reset();
   }
-
+/////通过planner_指针调用base_global_Planner中的makePlan函数规划全局路径
   bool MoveBase::makePlan(const geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& plan){
     boost::unique_lock<costmap_2d::Costmap2D::mutex_t> lock(*(planner_costmap_ros_->getCostmap()->getMutex()));
 
@@ -483,7 +488,7 @@ namespace move_base {
 
     return true;
   }
-
+//发布0的速度信息
   void MoveBase::publishZeroVelocity(){
     geometry_msgs::Twist cmd_vel;
     cmd_vel.linear.x = 0.0;
@@ -493,7 +498,7 @@ namespace move_base {
   }
 
   bool MoveBase::isQuaternionValid(const geometry_msgs::Quaternion& q){
-    //first we need to check if the quaternion has nan's or infs
+    //first we need to check if the quaternion has nan's or infs首先我们需要检查的四元数南的或资料
     if(!std::isfinite(q.x) || !std::isfinite(q.y) || !std::isfinite(q.z) || !std::isfinite(q.w)){
       ROS_ERROR("Quaternion has nans or infs... discarding as a navigation goal");
       return false;
@@ -642,10 +647,10 @@ namespace move_base {
 
     geometry_msgs::PoseStamped goal = goalToGlobalFrame(move_base_goal->target_pose);
 
-    //we have a goal so start the planner
+    //we have a goal so start the planner  (通知planner线程进行路径规划)
     boost::unique_lock<boost::recursive_mutex> lock(planner_mutex_);
     planner_goal_ = goal;
-    runPlanner_ = true;
+    runPlanner_ = true;  //通知规划路径线程
     planner_cond_.notify_one();
     lock.unlock();
 
@@ -659,7 +664,7 @@ namespace move_base {
       controller_costmap_ros_->start();
     }
 
-    //we want to make sure that we reset the last time we had a valid plan and control
+    //we want to make sure that we reset the last time we had a valid plan and control我们希望确保在上次有一个有效的计划和控制时重新设置
     last_valid_control_ = ros::Time::now();
     last_valid_plan_ = ros::Time::now();
     last_oscillation_reset_ = ros::Time::now();
@@ -677,7 +682,7 @@ namespace move_base {
 
       if(as_->isPreemptRequested()){
         if(as_->isNewGoalAvailable()){
-          //if we're active and a new goal is available, we'll accept it, but we won't shut anything down
+          //if we're active and a new goal is available, we'll accept it, but we won't shut anything down如果我们活跃，有了新的目标，我们会接受，但我们不会关闭任何东西。 
           move_base_msgs::MoveBaseGoal new_goal = *as_->acceptNewGoal();
 
           if(!isQuaternionValid(new_goal.target_pose.pose.orientation)){
@@ -687,29 +692,29 @@ namespace move_base {
 
           goal = goalToGlobalFrame(new_goal.target_pose);
 
-          //we'll make sure that we reset our state for the next execution cycle
+          //we'll make sure that we reset our state for the next execution cycle我们将确保重置下一个执行周期的状态。
           recovery_index_ = 0;
           state_ = PLANNING;
 
-          //we have a new goal so make sure the planner is awake
+          //we have a new goal so make sure the planner is awake 新的目标，确保规划器是唤醒状态
           lock.lock();
           planner_goal_ = goal;
           runPlanner_ = true;
           planner_cond_.notify_one();
           lock.unlock();
 
-          //publish the goal point to the visualizer
+          //publish the goal point to the visualizer 发布可视化路径
           ROS_DEBUG_NAMED("move_base","move_base has received a goal of x: %.2f, y: %.2f", goal.pose.position.x, goal.pose.position.y);
           current_goal_pub_.publish(goal);
 
-          //make sure to reset our timeouts and counters
+          //make sure to reset our timeouts and counters确保重启超时器和计时器
           last_valid_control_ = ros::Time::now();
           last_valid_plan_ = ros::Time::now();
           last_oscillation_reset_ = ros::Time::now();
           planning_retries_ = 0;
         }
         else {
-          //if we've been preempted explicitly we need to shut things down
+          //if we've been preempted explicitly we need to shut things down如果我们已经抢先明确我们需要关闭的东西
           resetState();
 
           //notify the ActionServer that we've successfully preempted
@@ -783,7 +788,7 @@ namespace move_base {
   {
     return hypot(p1.pose.position.x - p2.pose.position.x, p1.pose.position.y - p2.pose.position.y);
   }
-
+  //executeCycle函数：发布全局路径规划，以供local_planner使用
   bool MoveBase::executeCycle(geometry_msgs::PoseStamped& goal, std::vector<geometry_msgs::PoseStamped>& global_plan){
     boost::recursive_mutex::scoped_lock ecl(configuration_mutex_);
     //we need to be able to publish velocity commands
@@ -834,12 +839,12 @@ namespace move_base {
       lock.unlock();
       ROS_DEBUG_NAMED("move_base","pointers swapped!");
 
-      if(!tc_->setPlan(*controller_plan_)){
+      if(!tc_->setPlan(*controller_plan_)){ //tc_为nav_core::base_local_planner一个实例化对象，调用setPlan函数进入wpr1_local_planner入口
         //ABORT and SHUTDOWN COSTMAPS
         ROS_ERROR("Failed to pass global plan to the controller, aborting.");
         resetState();
 
-        //disable the planner thread
+        //disable the planner thread禁用计划线程
         lock.lock();
         runPlanner_ = false;
         lock.unlock();
@@ -895,7 +900,7 @@ namespace move_base {
         {
          boost::unique_lock<costmap_2d::Costmap2D::mutex_t> lock(*(controller_costmap_ros_->getCostmap()->getMutex()));
         
-        if(tc_->computeVelocityCommands(cmd_vel)){
+        if(tc_->computeVelocityCommands(cmd_vel)){ //tc_为nav_core::base_local_planner实例化对象，调用wpr1入口
           ROS_DEBUG_NAMED( "move_base", "Got a valid command from the local planner: %.3lf, %.3lf, %.3lf",
                            cmd_vel.linear.x, cmd_vel.linear.y, cmd_vel.angular.z );
           last_valid_control_ = ros::Time::now();

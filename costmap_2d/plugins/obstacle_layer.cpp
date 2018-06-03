@@ -99,7 +99,7 @@ void ObstacleLayer::onInitialize()
     source_node.param("data_type", data_type, std::string("PointCloud"));
     source_node.param("min_obstacle_height", min_obstacle_height, 0.0);
     source_node.param("max_obstacle_height", max_obstacle_height, 2.0);
-    source_node.param("inf_is_valid", inf_is_valid, false);
+    source_node.param("inf_is_valid", inf_is_valid, true);
     source_node.param("clearing", clearing, false);
     source_node.param("marking", marking, true);
 
@@ -283,7 +283,7 @@ void ObstacleLayer::laserScanValidInfCallback(const sensor_msgs::LaserScanConstP
   for (size_t i = 0; i < message.ranges.size(); i++)
   {
     float range = message.ranges[ i ];
-    if (!std::isfinite(range) && range > 0)
+    if ((!std::isfinite(range) && (range > 0)) || (range >= message.range_max) || (range == 0.0))
     {
       message.ranges[ i ] = message.range_max - epsilon;
     }

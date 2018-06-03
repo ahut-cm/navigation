@@ -41,7 +41,8 @@
 #include <string>
 
 #include <ros/ros.h>
-
+#include "std_msgs/String.h"
+#include <sstream>
 #include <actionlib/server/simple_action_server.h>
 #include <move_base_msgs/MoveBaseAction.h>
 
@@ -179,8 +180,8 @@ namespace move_base {
 
       boost::shared_ptr<nav_core::BaseLocalPlanner> tc_;
       costmap_2d::Costmap2DROS* planner_costmap_ros_, *controller_costmap_ros_;
-
-      boost::shared_ptr<nav_core::BaseGlobalPlanner> planner_;
+      
+      boost::shared_ptr<nav_core::BaseGlobalPlanner> planner_;//global_Planner的一个实例化对象
       std::string robot_base_frame_, global_frame_;
 
       std::vector<boost::shared_ptr<nav_core::RecoveryBehavior> > recovery_behaviors_;
@@ -192,7 +193,7 @@ namespace move_base {
       int32_t max_planning_retries_;
       uint32_t planning_retries_;
       double conservative_reset_dist_, clearing_radius_;
-      ros::Publisher current_goal_pub_, vel_pub_, action_goal_pub_;
+      ros::Publisher current_goal_pub_, vel_pub_, action_goal_pub_ ,m_FirstStep_pub_;
       ros::Subscriber goal_sub_;
       ros::ServiceServer make_plan_srv_, clear_costmaps_srv_;
       bool shutdown_costmaps_, clearing_rotation_allowed_, recovery_behavior_enabled_;
